@@ -1,0 +1,183 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Light is the base; dark applies when chosen, or when the system prefers it and nothing is saved. */
+:root {
+  --bg: #ffffff;
+  --surface: #fafafa;
+  --surface-2: #f2f2f2;
+  --line: #e8e8e8;
+  --line-strong: #d4d4d4;
+  --text: #0a0a0a;
+  --text-2: #666666;
+  --text-3: #a3a3a3;
+  --royal: #2445d1;
+  --royal-soft: color-mix(in srgb, #2445d1 8%, transparent);
+  --fact: #15803d;
+  --hyp: #b45309;
+  --unknown: #6d28d9;
+  --conflict: #dc2626;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #000000;
+  --surface: #0a0a0a;
+  --surface-2: #141414;
+  --line: #1f1f1f;
+  --line-strong: #2e2e2e;
+  --text: #ededed;
+  --text-2: #a1a1a1;
+  --text-3: #5c5c5c;
+  --royal: #5b7bff;
+  --royal-soft: color-mix(in srgb, #5b7bff 14%, transparent);
+  --fact: #3fb950;
+  --hyp: #d29922;
+  --unknown: #a78bfa;
+  --conflict: #f85149;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #000000;
+    --surface: #0a0a0a;
+    --surface-2: #141414;
+    --line: #1f1f1f;
+    --line-strong: #2e2e2e;
+    --text: #ededed;
+    --text-2: #a1a1a1;
+    --text-3: #5c5c5c;
+    --royal: #5b7bff;
+    --royal-soft: color-mix(in srgb, #5b7bff 14%, transparent);
+    --fact: #3fb950;
+    --hyp: #d29922;
+    --unknown: #a78bfa;
+    --conflict: #f85149;
+    color-scheme: dark;
+  }
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  border-color: var(--line);
+}
+
+.mono,
+.font-mono {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--royal);
+  outline-offset: 2px;
+}
+
+::placeholder {
+  color: var(--text-3);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--royal) 25%, transparent);
+}
+
+/* Quiet scrollbars that match the panes. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border: 3px solid var(--surface);
+  border-radius: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Tinted badge: 12% background, full-color text. */
+.tint-fact { background: color-mix(in srgb, var(--fact) 12%, transparent); color: var(--fact); }
+.tint-hyp { background: color-mix(in srgb, var(--hyp) 12%, transparent); color: var(--hyp); }
+.tint-unknown { background: color-mix(in srgb, var(--unknown) 12%, transparent); color: var(--unknown); }
+.tint-conflict { background: color-mix(in srgb, var(--conflict) 12%, transparent); color: var(--conflict); }
+.tint-royal { background: var(--royal-soft); color: var(--royal); }
+.tint-muted { background: var(--surface-2); color: var(--text-2); }
+
+/* The signature moment: linked timeline rows outline briefly after a parse. */
+@keyframes trace-flash {
+  0%, 70% { box-shadow: inset 0 0 0 1px var(--royal); }
+  100% { box-shadow: inset 0 0 0 1px transparent; }
+}
+.flash-row {
+  animation: trace-flash 1.2s ease-out;
+}
+@keyframes entry-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+.entry-in {
+  animation: entry-in 140ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flash-row,
+  .entry-in {
+    animation: none;
+  }
+  * {
+    transition: none !important;
+  }
+}
+
+.kbd {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  padding: 0 5px;
+  color: var(--text-2);
+  background: var(--surface);
+}
+
+/* Theme-specific assets (logo variants). Mirrors the token logic above. */
+.only-dark { display: none; }
+:root[data-theme="dark"] .only-dark { display: inline-block; }
+:root[data-theme="dark"] .only-light { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .only-dark { display: inline-block; }
+  :root:not([data-theme="light"]) .only-light { display: none; }
+}
+
+/* Homepage hero: ledger rows arrive one after another, once. */
+@keyframes hero-row-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+.hero-row {
+  animation: hero-row-in 220ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-row { animation: none; }
+}
