@@ -1,12 +1,14 @@
 "use client";
 
 import { applyParse, applyRecheck, buildParseRequest, buildRecheckRequest, updateEntry } from "./caseOps";
+import { HAS_API } from "./env";
 import { offlineResponse } from "./parseLocal";
 import type { CaseStore } from "./store";
 import type { LedgerEntry, ParseRequest, ParseResponse } from "./types";
 import { useUi } from "./ui";
 
 async function callParse(req: ParseRequest): Promise<ParseResponse> {
+  if (!HAS_API) return offlineResponse(req, "no model configured");
   try {
     const res = await fetch("/api/parse", {
       method: "POST",

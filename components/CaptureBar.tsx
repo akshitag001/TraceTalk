@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CornerDownLeft, Mic, X } from "lucide-react";
 import { submitNote } from "@/lib/actions";
+import { HAS_API } from "@/lib/env";
 import { undoNote } from "@/lib/caseOps";
 import type { CaseStore } from "@/lib/store";
 import { useUi } from "@/lib/ui";
@@ -41,6 +42,10 @@ export function CaptureBar({ store }: { store: CaseStore }) {
   const [modelReady, setModelReady] = useState<boolean | null>(null);
   useEffect(() => setSpeechOk(!!getSpeech()), []);
   useEffect(() => {
+    if (!HAS_API) {
+      setModelReady(false);
+      return;
+    }
     fetch("/api/parse")
       .then((r) => r.json())
       .then((d) => setModelReady(!!d.model))

@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { withBase } from "@/lib/env";
 
 /**
  * Official logo files from /public/brand, rendered as-is with <img>.
@@ -18,7 +19,7 @@ export function BrandLogo({ brand, height }: { brand: keyof typeof BRANDS; heigh
   const width = Math.round(height * b.ratio);
   const img = (file: string, className?: string) => (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={`/brand/${file}`} alt={b.name} width={width} height={height} className={className} style={{ height, width: "auto" }} />
+    <img src={withBase(`/brand/${file}`)} alt={b.name} width={width} height={height} className={className} style={{ height, width: "auto" }} />
   );
   if (b.dark && has(b.dark)) {
     return (

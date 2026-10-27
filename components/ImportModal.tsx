@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { recheck } from "@/lib/actions";
 import { addEvents, createEmptyCase } from "@/lib/caseOps";
+import { withBase } from "@/lib/env";
 import { ingestJsonl, type IngestResult } from "@/lib/ingest";
 import { addToCaseIndex, getCaseStore, type CaseStore } from "@/lib/store";
 import { useUi } from "@/lib/ui";
@@ -123,7 +124,7 @@ export function ImportModal({ store }: { store: CaseStore }) {
           {done && <p className="text-fact">{done}</p>}
 
           <div className="flex items-center gap-2 pt-1">
-            <a href="/case_IR-2026-0147.jsonl" download className="text-royal hover:underline">
+            <a href={withBase("/case_IR-2026-0147.jsonl")} download className="text-royal hover:underline">
               Download sample log
             </a>
             <Button variant="ghost" className="ml-auto" onClick={() => ui.set({ importOpen: false })}>

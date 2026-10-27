@@ -13,6 +13,10 @@
 </p>
 
 <p align="center">
+  <a href="https://akshitag001.github.io/TraceTalk/"><strong>Live demo →</strong> akshitag001.github.io/TraceTalk</a>
+</p>
+
+<p align="center">
   Built for <a href="https://www.wemakedevs.org/wispr">No Hands: The Wispr Challenge</a> by WeMakeDevs × Wispr Flow.
 </p>
 
@@ -116,7 +120,17 @@ Model output is validated with `zod` and the integrity check above. If the call 
 
 ### Deploy
 
-Import the repo in Vercel. The only server code is `app/api/parse/route.ts`. Add the three variables above if you want the model parser.
+**GitHub Pages (the live demo).** Every push to `main` runs [`.github/workflows/pages.yml`](.github/workflows/pages.yml), which builds a static export and publishes it. One-time setup: in the repo go to **Settings → Pages** and set **Source** to **GitHub Actions**.
+
+Pages can only serve static files, so that build leaves out the `/api/parse` route and parses notes with the offline rules in your browser. Everything else works the same, including contradictions, the report and importing your own logs. To try the Pages build locally:
+
+```bash
+mv app/api /tmp/api-hold            # the static build can't include the server route
+GITHUB_PAGES=true npx next build    # writes ./out, served under /TraceTalk/
+mv /tmp/api-hold app/api
+```
+
+**Vercel (if you want the model parser).** Import the repo and add the three variables above. The only server code is `app/api/parse/route.ts`, and a normal build keeps it.
 
 ## Using it with Wispr Flow
 
@@ -130,7 +144,7 @@ Two tips from building the demo:
 ## Project layout
 
 ```
-app/                     Next.js routes: / (homepage), /case/[id] (workbench), /case/[id]/report, /api/parse
+app/                     Next.js routes: / (homepage), /case/[id] (workbench), /case/[id]/report, /api/parse, not-found.tsx (renders imported cases on static hosting)
 components/              Workbench, Timeline, Ledger, EventDrawer, CaptureBar, Report, home/*
 content/home.ts          All homepage copy
 lib/

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Download, Printer } from "lucide-react";
+import { HAS_API } from "@/lib/env";
 import { clockTime, nowIso } from "@/lib/format";
 import {
   confirmedFacts,
@@ -81,7 +82,7 @@ function ReportBody({ c }: { c: Case }) {
       eventTime: e.eventTime,
       evidence: e.evidence.filter((l) => l.relation === "supports").map((l) => l.eventId),
     }));
-    if (!facts.length) {
+    if (!facts.length || !HAS_API) {
       setSummaryState("template");
       return;
     }
