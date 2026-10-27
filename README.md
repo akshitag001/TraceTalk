@@ -1,198 +1,197 @@
-<h1 align="center">TraceTalk</h1>
+# TraceTalk
 
-<p align="center">
-  <strong>Speak your investigation. Keep the evidence.</strong><br/>
-  A voice-first notebook for security analysts. Say what you see in the logs and it becomes a ledger of facts, hypotheses and open questions, each one linked to the exact log line behind it.
-</p>
+**Speak your investigation. Keep the evidence.**
 
-<p align="center">
-  <img alt="Next.js 15" src="https://img.shields.io/badge/Next.js-15-000?style=flat-square&logo=nextdotjs" />
-  <img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-2445D1?style=flat-square&logo=typescript&logoColor=white" />
-  <img alt="Works offline" src="https://img.shields.io/badge/works-without%20an%20API%20key-15803D?style=flat-square" />
-  <img alt="No login" src="https://img.shields.io/badge/signup-none-666?style=flat-square" />
-</p>
+TraceTalk is an investigation notebook for security analysts. You describe what you see in the logs, out loud or typed, and each statement becomes a fact, a hypothesis or an open question, linked to the exact log lines behind it. Claims the logs don't back stay unverified, and claims the logs contradict are flagged.
 
-<p align="center">
-  <a href="https://akshitag001.github.io/TraceTalk/"><strong>Live demo →</strong> akshitag001.github.io/TraceTalk</a>
-</p>
+[**Live demo**](https://akshitag001.github.io/TraceTalk/) · [How it works](#how-it-works) · [Run locally](#run-locally) · [Design decisions](#design-decisions) · [Limitations](#limitations)
 
-<p align="center">
-  Built for <a href="https://www.wemakedevs.org/wispr">No Hands: The Wispr Challenge</a> by WeMakeDevs × Wispr Flow.
-</p>
+[![Deploy](https://github.com/akshitag001/TraceTalk/actions/workflows/pages.yml/badge.svg)](https://github.com/akshitag001/TraceTalk/actions/workflows/pages.yml)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/workbench-dark.png" />
-  <img alt="The TraceTalk workbench: timeline of log events in the center, the evidence ledger on the right" src="docs/screenshots/workbench-light.png" />
+  <img alt="TraceTalk workbench: the event timeline in the center, the evidence ledger on the right, the note box at the bottom" src="docs/screenshots/workbench-light.png" />
 </picture>
 
----
+## Why
 
-## The problem
+During an incident, an analyst's eyes and hands are on the logs. Notes get written afterwards, from memory, and by the time the report is drafted, confirmed findings and educated guesses have merged. A reviewer who reads "data was exfiltrated" has no way to tell which log line showed it, or whether any did.
 
-When you're tracing an attack, your hands and eyes are on the logs. Switching to a notes app breaks focus, so notes get written later, from memory. By the time the report is written, confirmed facts and educated guesses have blurred together. A reviewer who reads "data was exfiltrated" can't tell which log line proved it, or whether anything did.
+TraceTalk keeps the analyst in the logs and keeps the reasoning attached to the evidence:
 
-TraceTalk keeps you in the logs. You select events, speak, and every statement lands in a ledger that shows what is **confirmed by a log line**, what is a **hypothesis**, and what is still **unknown**. Anything that conflicts with the logs, or with something you said earlier, is flagged on the spot.
+- **Statements are classified.** "Probably" and "looks like" become hypotheses. "We haven't confirmed" becomes an open question. Plain assertions become facts.
+- **Facts must be backed.** A fact is *confirmed* only when a log event contains the value it relies on. Otherwise it stays *unverified*.
+- **Conflicts surface immediately.** "PowerShell was started by Explorer" next to an event whose `ParentImage` is `WINWORD.EXE` produces a contradiction that cites the field and value.
+- **The report is auditable.** Every sentence cites entry and event IDs. The appendix holds the raw JSON of each cited event and every note, verbatim.
 
-> **TraceTalk never invents findings.** It only structures what you said and checks it against the evidence.
+TraceTalk never adds findings of its own. It only structures what the analyst said and checks it against the evidence.
 
-## What you get
+## How it works
 
-| | |
-|---|---|
-| **Dictate, don't type** | Works with [Wispr Flow](https://wisprflow.ai) system-wide. Hold your Flow key, speak, and clean text lands in the note box. Browser speech input and typing also work. |
-| **Facts, hypotheses, unknowns** | One note becomes separate ledger entries. "Probably" and "looks like" become hypotheses; "we haven't confirmed" becomes an open question. |
-| **Evidence you can click** | Each entry cites the events behind it, with the exact field values it matched (`ParentImage = …\powershell.exe`). Hover an entry and its rows light up in the timeline. Click an event to see every entry that cites it. |
-| **Contradiction flags** | "PowerShell was started by Explorer" next to a log showing Word started it? Flagged, with the field and value. Resolve or dismiss each one with a note. |
-| **A report a reviewer can trust** | Every sentence carries citations. The appendix has the raw JSON of each cited event and every note you dictated, verbatim. Export as Markdown or print to PDF. |
-| **Light and dark** | Black, white and one blue. Follows your system, with a toggle. |
+```mermaid
+flowchart LR
+  N["Note<br/>(dictated or typed)"] --> R["Candidate retrieval<br/>spoken times, entities,<br/>pinned rows · max 25 events"]
+  R --> P{Parser}
+  P -->|model configured| M["/api/parse<br/>OpenAI-compatible model,<br/>zod-validated"]
+  P -->|default, or on failure| O["Rule-based parser<br/>(deterministic)"]
+  M --> V["Integrity check"]
+  O --> V
+  V --> L[("Ledger<br/>localStorage")]
+  L --> T["Report<br/>Markdown / PDF"]
+```
+
+1. **Candidate retrieval** ([`lib/retrieval.ts`](lib/retrieval.ts)). Spoken times such as "14:32" or "2:32 pm" are resolved against the case date and time zone, and events within ±90 s are selected. Entities are extracted too: IPs, domains, file names, hosts, users, sizes like "46 megabytes", and aliases like "word" → `WINWORD.EXE`. Pinned rows always count. The top 25 events by a simple score become the only events the parser may cite.
+2. **Parsing.** The rule-based parser ([`lib/offlineParser.ts`](lib/offlineParser.ts)) splits the note into statements, classifies them and links evidence. If a model is configured, it gets the same candidates and a strict system prompt ([`lib/prompts.ts`](lib/prompts.ts)), and its output must match a `zod` schema. An invalid response gets one retry, then the rule-based parser takes over.
+3. **Integrity check** ([`lib/validate.ts`](lib/validate.ts)). This applies to both parsers:
+   - Every evidence link must point at a candidate event.
+   - Every quoted `field = value` must appear verbatim (case-insensitive) in that field of the raw event JSON. Links that fail are dropped and logged in the activity trail.
+   - A fact is confirmed only with at least one valid `supports` link.
+   - An unverified fact cannot mark an open question as answered.
+   - A contradiction must cite a real entry and a real event or earlier entry.
+
+   The check runs on the server for model output and again in the browser before anything is stored.
+
+## Features
+
+- **Timeline:** filters by source, host and text (`src:proxy`, `host:FS-FIN-01`, `id:EVT-0017`), virtualized rows, and a drawer with key fields, the process chain and raw JSON.
+- **Provenance both ways:** hover a ledger entry and the events it cites light up. Open an event and see every entry that cites it.
+- **Pinning:** Shift-click rows to attach them to your next note.
+- **Ledger:** filters by kind, matched fields per link, editing with a recheck, open questions that get answered by later facts, and contradictions resolved or dismissed with a note.
+- **Undo per note:** removes everything a note produced.
+- **Report:** a summary built only from confirmed facts, a timeline, hypotheses, open questions, contradictions, indicators extracted from linked events, the reasoning trail and a raw-event appendix. Download as Markdown, or print to PDF.
+- **Import:** your own `.jsonl` logs, validated line by line, into the current case or a new one.
+- **Light and dark themes**, keyboard shortcuts (`?`), and no login.
 
 <table>
   <tr>
-    <td width="50%"><img alt="Contradiction card and expanded evidence" src="docs/screenshots/ledger-contradiction-dark.png" /></td>
-    <td width="50%"><img alt="The exported incident report" src="docs/screenshots/report-light.png" /></td>
+    <td width="50%"><img alt="A contradiction between a claim and an event, with matched fields" src="docs/screenshots/ledger-contradiction-dark.png" /></td>
+    <td width="50%"><img alt="The exported incident report with citations" src="docs/screenshots/report-light.png" /></td>
   </tr>
   <tr>
-    <td align="center"><sub>A claim that disagrees with the logs, with matched fields</sub></td>
+    <td align="center"><sub>A claim that conflicts with the logs</sub></td>
     <td align="center"><sub>The report: every claim cites its evidence</sub></td>
   </tr>
 </table>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/home-dark.png" />
-  <img alt="The TraceTalk homepage" src="docs/screenshots/home-light.png" />
-</picture>
-
 ## Try it
 
-Open the app and you land in a preloaded incident (`IR-2026-0147`, 61 events across Sysmon, Windows Security, a web proxy and Defender). Type or speak these in order:
+The [live demo](https://akshitag001.github.io/TraceTalk/) opens with a sample incident: 61 events from one workstation across Sysmon, Windows Security, a web proxy and Defender. Enter these in order:
 
-1. *At 14:32 the host made an unusual outbound connection. The process was launched by PowerShell. We haven't confirmed data exfiltration yet.*
-   → two confirmed facts, linked to the events that show them, and one open question.
-2. Shift-click **EVT-0009** to pin it, then: *PowerShell was started by Explorer, so the user probably ran it by hand.*
-   → a hypothesis, and a **contradiction**: the log shows Word started PowerShell.
-3. *No data left the host.*
-   → an unverified fact, and a **contradiction** against a 46 MB upload in EVT-0048.
-4. *Looks like they dumped credentials, rundll32 touched lsass at 14:41.*
-   → a hypothesis, plus a confirmed fact linked to EVT-0033.
-5. *Confirmed. About 46 megabytes went out to the C2 at 14:52, right after they built cache.rar.*
-   → a confirmed fact, and the open question from step 1 is marked **answered**.
+| # | Note | Result |
+|---|---|---|
+| 1 | *At 14:32 the host made an unusual outbound connection. The process was launched by PowerShell. We haven't confirmed data exfiltration yet.* | Two confirmed facts (EVT-0017/0018, EVT-0015) and an open question |
+| 2 | Pin **EVT-0009** (Shift-click), then: *PowerShell was started by Explorer, so the user probably ran it by hand.* | A hypothesis, and a contradiction: `ParentImage` is `WINWORD.EXE` |
+| 3 | *No data left the host.* | A contradiction against a 48,213,904-byte upload in EVT-0048 |
+| 4 | *Looks like they dumped credentials, rundll32 touched lsass at 14:41.* | A hypothesis and a confirmed fact (EVT-0033) |
+| 5 | *Confirmed. About 46 megabytes went out to the C2 at 14:52, right after they built cache.rar.* | A confirmed fact, which answers the open question from note 1 |
 
-Then resolve both contradictions with a short note, open **Export report**, and download the Markdown.
+## Run locally
 
-## How the integrity check works
-
-The parser, whether the rule-based one or a model, proposes evidence links. Each link must quote a field name and a value from the event. Before anything is stored:
-
-1. The event must be one of the candidate events sent with the note.
-2. Every quoted value must appear verbatim (case-insensitive) in that field of the raw event JSON. If it doesn't, the link is dropped and the activity trail records `1 evidence link rejected: value not found in EVT-00xx`.
-3. A fact is **Confirmed** only when at least one valid `supports` link exists. Otherwise it is **Unverified**.
-4. An unverified fact can never mark an open question as answered.
-5. A contradiction must cite a real entry and a real event or earlier entry, or it is dropped.
-
-This runs on the server for model output and again in the browser before the ledger is written ([`lib/validate.ts`](lib/validate.ts)). The report summary follows the same rule: a sentence citing an ID that doesn't exist is removed.
-
-## Run it
+Requires Node 20+.
 
 ```bash
 npm install
-npm run dev      # http://localhost:3000 — the homepage; "Open sample case" goes to the workbench
-npm test         # runs the five demo lines through the offline parser and checks every quoted value
-npm run build
+npm run dev     # http://localhost:3000
+npm test        # runs the five notes above through the rule-based parser and checks every stored quote
 ```
 
-Node 20 or newer. No database, no login; case state lives in your browser's localStorage.
+### Configuration (optional)
 
-### Optional: a model parser
-
-With no configuration TraceTalk uses its deterministic rule-based parser, and everything above still works, including both planted contradictions. To use a model instead, set any OpenAI-compatible chat completions API:
+With no configuration, the rule-based parser is used. To add a model, set any OpenAI-compatible chat completions endpoint in `.env.local`:
 
 ```bash
-cp .env.example .env.local
+LLM_BASE_URL=https://api.groq.com/openai/v1
+LLM_API_KEY=...
+LLM_MODEL=llama-3.3-70b-versatile
 ```
 
-| Variable | Example |
+### Deployment
+
+| Target | What you get | How |
+|---|---|---|
+| **GitHub Pages** (the live demo) | A static export. No server, so notes are parsed by the rule-based parser in the browser. | Push to `main`. [`pages.yml`](.github/workflows/pages.yml) runs `npm test`, builds with `GITHUB_PAGES=true` and deploys. One-time setup: Settings → Pages → Source → GitHub Actions. |
+| **Vercel** | The full app, including the model parser. | Import the repo and set the three variables above. |
+
+## Design decisions
+
+| Decision | Why |
 |---|---|
-| `LLM_BASE_URL` | `https://api.groq.com/openai/v1` |
-| `LLM_API_KEY` | your key |
-| `LLM_MODEL` | `llama-3.3-70b-versatile` |
+| **The parser proposes; the validator decides** | A model can be wrong with confidence. Requiring a verbatim quote from the event turns "the model says so" into something checkable, and the same check applies to the rule-based parser. |
+| **A deterministic parser first, a model second** | The app must work with no API key and no network, and a live demo can't depend on a third-party service. A model, when configured, widens what's understood without changing the guarantees. |
+| **Retrieval before parsing** | It bounds the context to 25 events and limits what can be cited. An event the parser never saw can't be linked. |
+| **Notes are stored verbatim** | Entries are rewritten into neutral sentences, so the original words are kept to show how each conclusion was reached. |
+| **State in the browser** | No backend, accounts or database, which makes it simple to deploy and keeps logs on the analyst's machine. The cost is no sync or collaboration (see below). |
+| **Static hosting stays first-class** | Only the API route is excluded from the static build. Imported cases, whose IDs the build can't know, are rendered by a client-side 404 shell ([`app/not-found.tsx`](app/not-found.tsx)). |
 
-Model output is validated with `zod` and the integrity check above. If the call fails, or the output doesn't match the schema after one retry, the note is parsed with the offline rules and the capture bar says so.
+Smaller choices made where the spec was open are recorded in [`DECISIONS.md`](DECISIONS.md).
 
-### Deploy
+## Limitations
 
-**GitHub Pages (the live demo).** Every push to `main` runs [`.github/workflows/pages.yml`](.github/workflows/pages.yml), which builds a static export and publishes it. One-time setup: in the repo go to **Settings → Pages** and set **Source** to **GitHub Actions**.
+- **The rule-based parser is pattern-based.** It handles time references, sizes, known process aliases, who-launched-whom claims, "no data left"-style claims, and two facts giving the same process different IPs. Contradictions outside those patterns need the model parser.
+- **The model path hasn't been evaluated.** Its schema validation, integrity check and fallback are tested. Its accuracy across real notes and models is not.
+- **The log format is simplified.** Sysmon, Windows Security, proxy and Defender events are expected as flat JSONL objects, not raw EVTX or vendor exports.
+- **Single analyst, single browser.** Cases live in `localStorage`. Clearing site data deletes them, and there is no sharing.
+- **The sample data is synthetic,** and so is the incident. TraceTalk is a notebook, not a SIEM or a detection engine.
 
-Pages can only serve static files, so that build leaves out the `/api/parse` route and parses notes with the offline rules in your browser. Everything else works the same, including contradictions, the report and importing your own logs. To try the Pages build locally:
+## Roadmap
 
-```bash
-mv app/api /tmp/api-hold            # the static build can't include the server route
-GITHUB_PAGES=true npx next build    # writes ./out, served under /TraceTalk/
-mv /tmp/api-hold app/api
-```
+- [ ] Hide routine events (Teams, OneDrive, Office 365) and collapse repeated beacon rows into one expandable row
+- [ ] Signal tags on events, such as *Encoded command*, *Office spawned shell* and *LSASS access*
+- [ ] Decoded view for encoded PowerShell in the event drawer
+- [ ] A larger floating note box with pinned-event chips
+- [ ] Accessibility pass (Lighthouse ≥ 95)
 
-**Vercel (if you want the model parser).** Import the repo and add the three variables above. The only server code is `app/api/parse/route.ts`, and a normal build keeps it.
-
-## Using it with Wispr Flow
-
-TraceTalk has no speech engine of its own, on purpose. Wispr Flow works in any text box, so the note box is just a text box: hold your Flow key (Ctrl + Win on Windows, Fn on Mac by default), speak, release, press Enter.
-
-Two tips from building the demo:
-
-- Add `rundll32`, `lsass`, `PowerShell`, `cache.rar` and `exfiltration` to Flow's dictionary. The parser matches exact process and file names.
-- Say times with a colon: "14:32". A quick glance at the text before pressing Enter catches the odd mis-hearing.
+The full plan is in [`docs/specs/PROMPT_v2_UI.md`](docs/specs/PROMPT_v2_UI.md).
 
 ## Project layout
 
 ```
-app/                     Next.js routes: / (homepage), /case/[id] (workbench), /case/[id]/report, /api/parse, not-found.tsx (renders imported cases on static hosting)
-components/              Workbench, Timeline, Ledger, EventDrawer, CaptureBar, Report, home/*
-content/home.ts          All homepage copy
+app/
+  page.tsx                  homepage
+  case/[id]/                workbench and report routes
+  api/parse/route.ts        model parser endpoint (excluded from the static build)
+  not-found.tsx             renders imported cases on static hosting
+components/                 Workbench, Timeline, Ledger, EventDrawer, CaptureBar, Report, home/
+content/home.ts             homepage copy
 lib/
-  ingest.ts summarize.ts   JSONL → events with one-line summaries
-  retrieval.ts time.ts     Candidate retrieval: spoken times, entities, aliases
-  offlineParser.ts         Deterministic parser and the built-in contradiction rules
-  validate.ts schema.ts    The integrity check and zod schemas
-  caseOps.ts store.ts      Pure case operations and per-case persisted stores
-  report.ts                Report, indicators, Markdown export
-data/                    The sample case (JSONL)
-scripts/demo-check.ts    The demo script as an automated test
-docs/specs/              The build specs this project was made from
-DECISIONS.md             Where the spec was open, and what I chose
+  retrieval.ts, time.ts     candidate retrieval: times, entities, aliases
+  offlineParser.ts          rule-based parser and contradiction rules
+  validate.ts, schema.ts    integrity check, zod schemas
+  caseOps.ts, store.ts      pure case operations, per-case persisted stores
+  ingest.ts, summarize.ts   JSONL ingestion and one-line event summaries
+  report.ts                 report model, indicators, Markdown export
+data/                       sample case (JSONL)
+scripts/demo-check.ts       end-to-end check of the demo notes
+docs/                       screenshots and the original build specs
 ```
 
-## The sample case
+**Stack:** Next.js 15 (App Router), React 19, TypeScript (strict), Tailwind CSS, Zustand, `@tanstack/react-virtual`, `zod`, Geist and Lucide.
 
-61 synthetic events from one finance workstation. IPs use RFC 5737 documentation ranges, and domains and hashes are invented, so don't visit them.
+## Dictation
+
+TraceTalk has no speech engine. The note box is a plain text field, so any system-wide dictation works. It was built for [Wispr Flow](https://wisprflow.ai): hold the Flow key (Ctrl + Win on Windows, Fn on macOS), speak, release, then press Enter. Browser speech input is available as a fallback.
+
+The rule-based parser matches exact names, so add terms like `rundll32`, `lsass`, `PowerShell` and `cache.rar` to Flow's dictionary, and say times as "14:32".
+
+## Sample incident
 
 | Time (UTC) | What happened | Events |
 |---|---|---|
-| 14:16–14:29 | Outlook saves `Invoice_Oct2026_Vendor4471.docm`; Word opens it | EVT-0007, EVT-0008 |
+| 14:16–14:29 | Outlook saves `Invoice_Oct2026_Vendor4471.docm`; Word opens it | EVT-0007, 0008 |
 | 14:31:48 | Word spawns hidden, encoded PowerShell | EVT-0009 |
-| 14:31:50–59 | PowerShell downloads a stager and writes `msvcsync.dll` | EVT-0010 – EVT-0014 |
-| 14:32:04–07 | PowerShell launches `rundll32 msvcsync.dll`, which connects to 203.0.113.77:443 | EVT-0015 – EVT-0018 |
-| 14:38–14:39 | Discovery: `whoami`, `net group "Domain Admins"`, `nltest` | EVT-0027 – EVT-0029 |
-| 14:41:55 | rundll32 opens lsass.exe (0x1010) | EVT-0033 |
-| 14:47–14:49 | A renamed RAR archives `Vendor Payments FY26` into `cache.rar` | EVT-0039, EVT-0041, EVT-0043 |
-| 14:52:13 | 48,213,904 bytes POSTed to `/api/v1/upload` | EVT-0047, EVT-0048 |
-| 14:55–14:56 | Failed NTLM logons to FS-FIN-01 as `svc_backup` and `administrator` | EVT-0052 – EVT-0056 |
-| 15:04 | Defender quarantines `msvcsync.dll` | EVT-0060, EVT-0061 |
+| 14:31:50–59 | PowerShell downloads a stager and writes `msvcsync.dll` | EVT-0010 – 0014 |
+| 14:32:04–07 | `rundll32` loads the DLL and connects to 203.0.113.77:443 | EVT-0015 – 0018 |
+| 14:38–14:39 | Discovery: `whoami`, `net group "Domain Admins"`, `nltest` | EVT-0027 – 0029 |
+| 14:41:55 | `rundll32` opens `lsass.exe` (0x1010) | EVT-0033 |
+| 14:47–14:49 | A renamed RAR archives `Vendor Payments FY26` into `cache.rar` | EVT-0039, 0041, 0043 |
+| 14:52:13 | 48,213,904 bytes POSTed to `/api/v1/upload` | EVT-0047, 0048 |
+| 14:55–14:56 | Failed NTLM logons to FS-FIN-01 | EVT-0052 – 0056 |
+| 15:04 | Defender quarantines `msvcsync.dll` | EVT-0060, 0061 |
 
-You can bring your own logs: **Import logs** takes `.jsonl`, one JSON object per line with `id`, `timestamp`, `source`, `host` and `event_id`.
+IPs use RFC 5737 documentation ranges. Domains and hashes are invented, so don't visit them.
 
-## Status
+## Acknowledgements
 
-Working today: the workbench, the offline and model parsers, the integrity check, contradictions, the report with Markdown export, JSONL import, and the homepage in light and dark.
+Built for [No Hands: The Wispr Challenge](https://www.wemakedevs.org/wispr) by WeMakeDevs × Wispr Flow. The Wispr Flow and WeMakeDevs logos are used as published on the challenge page and belong to their owners.
 
-Still on the list ([`docs/specs/PROMPT_v2_UI.md`](docs/specs/PROMPT_v2_UI.md), steps 3–5): hiding routine events and collapsing repeated beacon rows so the key events stand out, signal tags like *Encoded command*, a larger floating note box, and an accessibility pass.
-
-## Keyboard
-
-`/` note box · `j` `k` move through the timeline · `Enter` open the drawer · `p` pin a row · `e` ledger · `f` filter · `Esc` close · `?` all shortcuts
-
-## Built with
-
-Next.js 15 (App Router), React 19, TypeScript (strict), Tailwind CSS, Zustand, `@tanstack/react-virtual`, `zod`, Geist, and `lucide-react`. Wispr Flow and WeMakeDevs logos are used as provided on the challenge page.
-
----
-
-<sub>Made by <a href="https://github.com/akshitag001">Akshit</a>. TraceTalk is a hackathon project: the sample data is synthetic, and it is not a substitute for your SIEM.</sub>
+Made by [Akshit](https://github.com/akshitag001).
